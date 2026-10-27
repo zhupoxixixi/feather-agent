@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Feather · 羽</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="会话导航">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">羽</span>
+        <div><strong>Feather</strong><span>轻量工作助手</span></div>
+        <span class="preview-tag">预览</span>
+      </div>
+      <button id="new-session-button" class="new-session" type="button"><span aria-hidden="true">＋</span> 新建任务</button>
+      <div class="sidebar-heading"><span>最近会话</span><button id="refresh-button" class="icon-button" type="button" aria-label="刷新会话" title="刷新会话">↻</button></div>
+      <nav id="session-list" class="session-list" aria-label="最近会话"></nav>
+      <div class="sidebar-footer"><span class="local-dot" aria-hidden="true"></span>会话记录保存在本机</div>
+    </aside>
+
+    <main class="workspace">
+      <header class="page-header">
+        <div><p class="eyebrow">FEATHER WORKSPACE</p><h1>把想法，变成完成的工作。</h1><p class="page-subtitle">选择一个目录，告诉 Feather 你想完成什么。</p></div>
+        <span id="status-pill" class="status-pill" data-status="ready"><span class="status-dot" aria-hidden="true"></span><span id="status-label" role="status" aria-live="polite">正在启动</span></span>
+      </header>
+
+      <div id="error-banner" class="error-banner" role="alert" hidden></div>
+
+      <section class="card task-card" aria-labelledby="task-heading">
+        <div class="card-heading">
+          <div><span class="section-index">01</span><h2 id="task-heading">开始一个任务</h2></div>
+          <span id="session-caption" class="session-caption">新会话</span>
+        </div>
+        <div class="workspace-picker">
+          <span class="folder-icon" aria-hidden="true">▱</span>
+          <div class="workspace-copy"><span class="field-caption">工作目录</span><span id="workspace-path" class="workspace-path">尚未选择目录</span></div>
+          <button id="choose-workspace-button" class="button button-outline button-small" type="button">选择目录</button>
+        </div>
+        <label for="task-input" class="input-label">你想完成什么？</label>
+        <textarea id="task-input" rows="5" maxlength="20000" placeholder="例如：阅读这个项目，说明入口、主要模块，以及最值得改进的地方。" spellcheck="false"></textarea>
+        <div class="task-hints">
+          <div class="example-tasks" aria-label="任务示例">
+            <button class="example-task" type="button" data-example="只读查看当前目录，整理主要文件和目录结构，并解释它们的用途。">整理文件清单</button>
+            <button class="example-task" type="button" data-example="查找当前目录中的 CSV 文件，阅读其列名和数据，汇总关键数字并直接回复结论。">汇总 CSV 数据</button>
+            <button class="example-task" type="button" data-example="阅读项目说明和主要入口文件，解释项目结构，并列出有依据的改进建议。暂时不要修改文件。">检查项目结构</button>
+          </div>
+          <span id="task-counter" class="task-counter">0 / 20000</span>
+        </div>
+        <div class="permission-row">
+          <label class="checkbox-label"><input id="allow-write" type="checkbox"><span>允许修改工作目录中的文件</span></label>
+          <span id="permission-note" class="permission-note">只读模式</span>
+        </div>
+        <div class="task-actions">
+          <button id="run-button" class="button button-primary" type="button" disabled><span aria-hidden="true">↗</span> 开始任务</button>
+          <button id="cancel-button" class="button button-stop" type="button" disabled>停止任务</button>
+          <span class="keyboard-hint">Ctrl + Enter 开始</span>
+        </div>
+      </section>
+
+      <details id="model-settings" class="card settings-card">
+        <summary><span class="settings-summary"><span class="section-index">02</span><span>模型设置</span></span><span id="config-state" class="config-state">待设置</span></summary>
+        <form id="settings-form">
+          <div class="settings-grid">
+            <label class="setting-field"><span>模型服务</span><select id="provider-input"><option value="openai">OpenAI / 兼容接口</option><option value="anthropic">Anthropic</option></select></label>
+            <label class="setting-field"><span>模型名称</span><input id="model-input" type="text" maxlength="256" placeholder="填写服务商提供的模型名" spellcheck="false"></label>
+            <label class="setting-field full-width"><span>接口地址</span><input id="base-url-input" type="url" placeholder="https://api.openai.com/v1" spellcheck="false"></label>
+            <label class="setting-field full-width"><span>API 密钥 <span id="key-state" class="field-note">尚未配置</span></span><input id="api-key-input" type="password" maxlength="8192" autocomplete="off" placeholder="留空可保留已经配置的密钥" spellcheck="false"></label>
+          </div>
+          <div class="settings-bottom">
+            <label class="checkbox-label"><input id="remember-key" type="checkbox"><span>使用系统加密记住密钥</span></label>
+            <button id="save-settings-button" class="button button-outline button-small" type="submit">保存设置</button>
+          </div>
+          <p id="settings-message" class="helper-text" role="status">密钥不会显示在会话中。不勾选记住时，仅在本次打开期间使用。</p>
+        </form>
+      </details>
+
+      <section class="card result-card" aria-labelledby="result-heading">
+        <div class="card-heading"><div><span class="section-index">03</span><h2 id="result-heading">任务结果</h2></div><span id="result-meta" class="result-meta">等待开始</span></div>
+        <div id="answer-output" class="answer-output empty-answer" aria-live="polite">完成后的答复会显示在这里。你也可以先运行下面的演示，体验完整流程。</div>
+        <details id="activity-panel" class="activity-panel">
+          <summary><span>执行记录</span><span id="activity-count">0 条</span></summary>
+          <ol id="activity-list" class="activity-list"></ol>
+        </details>
+      </section>
+
+      <section class="demo-card" aria-label="无密钥演示">
+        <div class="demo-symbol" aria-hidden="true">✦</div>
+        <div class="demo-copy"><strong>先试一次，再配置模型。</strong><p>在新的示例目录读取 CSV 并生成报告，不改动你的现有文件。</p><span class="demo-label">模拟模型 · 不调用 API</span></div>
+        <button id="demo-button" class="button button-outline" type="button" disabled>体验演示</button>
+      </section>
+      <footer class="page-footer">Feather · 羽 <span>轻一点，专注把事情完成。</span></footer>
+    </main>
+  </div>
+</body>
+</html>

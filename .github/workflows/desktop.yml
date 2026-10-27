@@ -1,0 +1,65 @@
+name: Desktop Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feather-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install development packages without launching target apps
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Unit and HTTP protocol tests
+        run: npm test
+      - name: File-task demo
+        run: npm run demo
+
+  windows:
+    name: Windows desktop installer
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      FEATHER_SMOKE_ARTIFACTS: smoke-artifacts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned Electron and builder
+        run: npm install --no-audit --no-fund
+      - name: Real Electron GUI and file-task smoke
+        run: npm run smoke:gui
+      - name: Build Windows setup and portable executables
+        run: npm run build:win
+      - name: Upload Windows programs and GUI verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Feather-Windows-0.2.0-x64
+          path: |
+            dist/*.exe
+            smoke-artifacts/*
+          if-no-files-found: warn
+          retention-days: 30

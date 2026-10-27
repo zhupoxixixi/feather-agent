@@ -1,0 +1,67 @@
+{
+  "name": "feather-agent-desktop",
+  "version": "0.2.0",
+  "description": "Feather desktop preview: bounded local file tasks with your model API",
+  "private": true,
+  "type": "module",
+  "main": "desktop/main.mjs",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs",
+    "demo": "node bin/demo.mjs",
+    "smoke:gui": "electron . --smoke-test",
+    "build:win": "electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.1"
+  },
+  "build": {
+    "appId": "dev.feather.agent",
+    "productName": "Feather",
+    "asar": true,
+    "compression": "normal",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "core/**/*",
+      "desktop/**/*",
+      "package.json",
+      "README.md",
+      "LICENSE"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Feather",
+      "artifactName": "Feather-Setup-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Feather-Portable-${version}-${arch}.${ext}"
+    }
+  }
+}
