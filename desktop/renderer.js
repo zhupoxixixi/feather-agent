@@ -336,13 +336,18 @@
       el.caption.textContent = String(session.title || '历史会话').slice(0, 60);
       clearActivity();
       const messages = Array.isArray(session.messages) ? session.messages : [];
-      let answer = '';
-      for (let index = messages.length - 1; index >= 0; index--) {
-        const message = messages[index];
-        if (message.role === 'assistant' && (!Array.isArray(message.tool_calls) || message.tool_calls.length === 0) && typeof message.content === 'string' && message.content.trim()) { answer = message.content; break; }
+      const lastRun = session.lastRun && typeof session.lastRun === 'object' ? session.lastRun : null;
+      const hasLastRunAnswer = typeof lastRun?.answer === 'string';
+      // Cancelled, failed, or budget-limited runs may have no final assistant message.
+      let answer = hasLastRunAnswer ? lastRun.answer : '';
+      if (!hasLastRunAnswer) {
+        for (let index = messages.length - 1; index >= 0; index--) {
+          const message = messages[index];
+          if (message.role === 'assistant' && (!Array.isArray(message.tool_calls) || message.tool_calls.length === 0) && typeof message.content === 'string' && message.content.trim()) { answer = message.content; break; }
+        }
       }
       setAnswer(answer || '该会话尚无最终答复。输入新的任务可继续处理。', !answer);
-      el.resultMeta.textContent = '已打开历史会话';
+      el.resultMeta.textContent = hasLastRunAnswer ? resultMetadata(lastRun) : '已打开历史会话';
       setStatus(session.status || 'ready');
       for (const message of messages.slice(-50)) {
         if (message.role === 'user') addActivity('用户任务：' + String(message.content || '').slice(0, 220));

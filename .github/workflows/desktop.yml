@@ -50,6 +50,7 @@ jobs:
       - name: Install pinned Electron and builder
         run: npm install --no-audit --no-fund
       - name: Real Electron GUI and file-task smoke
+        timeout-minutes: 3
         run: npm run smoke:gui
       - name: Build Windows setup and portable executables
         run: npm run build:win

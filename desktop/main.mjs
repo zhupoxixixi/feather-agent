@@ -11,6 +11,20 @@ const smoke = process.argv.includes('--smoke-test');
 let window;
 let service;
 let quitting = false;
+let smokeStage = 'loading-main';
+const smokeDeadline = smoke ? setTimeout(() => {
+  console.error('GUI_SMOKE_TIMEOUT ' + smokeStage);
+  app.exit(1);
+}, 60000) : null;
+function traceSmoke(stage) { smokeStage = stage; if (smoke) console.log('GUI_SMOKE_STAGE ' + stage); }
+process.on('uncaughtException', (error) => {
+  console.error('MAIN_UNCAUGHT ' + String(error?.stack || error));
+  app.exit(1);
+});
+process.on('unhandledRejection', (error) => {
+  console.error('MAIN_REJECTED ' + String(error?.stack || error));
+  app.exit(1);
+});
 async function encryptionAvailable() {
   if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') return false;
   return typeof safeStorage.isAsyncEncryptionAvailable === 'function' ? await safeStorage.isAsyncEncryptionAvailable() : safeStorage.isEncryptionAvailable();
@@ -22,11 +36,15 @@ async function decryptCredential(buffer) {
   if (typeof decoded.result !== 'string') throw new Error('无法解密已保存的密钥');
   return decoded.result;
 }
+async function bootstrap() {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.focus(); } });
+  traceSmoke('waiting-for-app-ready');
   await app.whenReady();
+  traceSmoke('app-ready');
   const dataDir = smoke ? await mkdtemp(path.join(tmpdir(), 'feather-ui-smoke-')) : app.getPath('userData');
+  traceSmoke('opening-service');
   service = await createDesktopService({
     dataDir,
     onEvent: (value) => { if (window && !window.isDestroyed()) window.webContents.send('feather:event', value); },
@@ -62,6 +80,7 @@ else {
   handle('cancel', () => service.cancel());
   handle('session', (id) => service.inspectSession(id));
   handle('demo', () => service.demo());
+  traceSmoke('creating-window');
   window = new BrowserWindow({
     width: 1180, height: 800, minWidth: 860, minHeight: 640, show: !smoke, title: 'Feather',
     backgroundColor: '#f5f8f7', autoHideMenuBar: true,
@@ -78,19 +97,23 @@ else {
     void service.close().finally(() => app.quit());
   });
   app.on('window-all-closed', () => app.quit());
+  traceSmoke('loading-window');
   await window.loadFile(path.join(directory, 'index.html'));
+  traceSmoke('window-loaded');
   if (smoke) {
-    const deadline = setTimeout(() => { console.error('GUI smoke timed out'); app.exit(1); }, 60000);
     try {
+      traceSmoke('credential-roundtrip');
       let secureStorageVerified = false;
       if (await encryptionAvailable()) {
         const cipher = typeof safeStorage.encryptStringAsync === 'function' ? await safeStorage.encryptStringAsync('feather-ci-roundtrip') : safeStorage.encryptString('feather-ci-roundtrip');
         if (await decryptCredential(cipher) !== 'feather-ci-roundtrip') throw new Error('Credential encryption roundtrip failed');
         secureStorageVerified = true;
       }
+      traceSmoke('renderer-check');
       const initial = await window.webContents.executeJavaScript('({ready: Boolean(window.feather), noNode: typeof require === "undefined", title: document.title, hasTask: Boolean(document.getElementById("task-input")), hasDemo: Boolean(document.getElementById("demo-button"))})');
       if (!initial.ready || !initial.noNode || !initial.hasTask || !initial.hasDemo) throw new Error('GUI or preload did not load');
       await window.webContents.executeJavaScript('new Promise((resolve,reject) => { const started=Date.now(); const timer=setInterval(() => { const button=document.getElementById("demo-button"); if(button && !button.disabled) {clearInterval(timer);resolve(true);} else if(Date.now()-started>10000) {clearInterval(timer);reject(new Error("GUI not ready"));} },25); })');
+      traceSmoke('click-demo');
       await window.webContents.executeJavaScript('document.getElementById("demo-button").click()');
       const started = Date.now();
       let result;
@@ -105,18 +128,25 @@ else {
       if (!rendered.answer.includes('350')) throw new Error('GUI did not render the final answer');
       const artifactDir = process.env.FEATHER_SMOKE_ARTIFACTS || path.resolve('smoke-artifacts');
       await mkdir(artifactDir, { recursive: true });
+      traceSmoke('capture-window');
       const screenshot = await window.webContents.capturePage();
       await writeFile(path.join(artifactDir, 'feather-desktop.png'), screenshot.toPNG());
       await writeFile(path.join(artifactDir, 'gui-smoke.json'), JSON.stringify({ passed: true, isolatedRenderer: initial.noNode, secureStorageVerified, simulatedModel: true, result, rendered }, null, 2));
       console.log('GUI_SMOKE_PASS ' + JSON.stringify({ sessionId: result.sessionId, verified: result.verified }));
-      clearTimeout(deadline);
+      clearTimeout(smokeDeadline);
       await service.close();
       app.exit(0);
     } catch (error) {
-      clearTimeout(deadline);
+      clearTimeout(smokeDeadline);
       console.error('GUI_SMOKE_FAIL ' + String(error?.message || error));
       await service.close().catch(() => {});
       app.exit(1);
     }
   }
 }
+
+}
+void bootstrap().catch((error) => {
+  console.error('MAIN_STARTUP_FAILED ' + String(error?.stack || error));
+  app.exit(1);
+});
